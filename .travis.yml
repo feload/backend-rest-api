@@ -1,0 +1,8 @@
+language: python
+python:
+  - "3.6"
+
+before_script: echo "before_script" && exit 0
+script:
+  - echo "script" && exit 0
+after_script: echo "after_script" && exit 0
