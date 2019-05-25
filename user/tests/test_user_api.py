@@ -1,3 +1,4 @@
+from pdb import set_trace
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -7,6 +8,7 @@ from rest_framework import status
 
 CREATE_USER_URL = reverse('user:create')
 TOKEN_USER_URL = reverse('user:token')
+ME_URL = reverse('user:me')
 
 def create_user(**params):
     return get_user_model().objects.create_user(**params)
@@ -100,3 +102,42 @@ class PubliUserApiTests(TestCase):
         res = self.client.post(TOKEN_USER_URL, payload)
         self.assertNotIn('token', res.data)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_no_profile_info_without_authentication(self):
+        """Test that no one can retrieve profile info without authenticating first"""
+        res = self.client.get(ME_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PrivateUserApiTests(TestCase):
+    """Test private user api use cases"""
+
+    def setUp(self):
+        self.user = create_user(email="test@testuser.com", password="Password123")
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_retrieve_profile_success(self):
+        """Test retrieving profile for user"""
+        res = self.client.get(ME_URL, {})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, {
+            "name": self.user.name,
+            "email": self.user.email
+        })
+
+    def test_post_me_not_allowed(self):
+        """Test that POST is not allowed on the 'me' url"""
+        res = self.client.post(ME_URL, {})
+        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_update_user_profile(self):
+        """Test update user profile"""
+        payload = {'name':'New name', 'password': 'NewPassword1234'}
+        res = self.client.patch(ME_URL, payload)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.user.name, payload["name"])
+        self.assertTrue(self.user.check_password(payload['password']))
